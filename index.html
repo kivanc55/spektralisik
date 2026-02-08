@@ -54,7 +54,7 @@
             position: relative; 
             overflow: hidden; 
             background: #111; 
-            transition: background 0.4s;
+            transition: background 0.1s; /* Daha hızlı tepki için düşürüldü */
             box-shadow: inset 0 0 50px rgba(0,0,0,0.5);
         }
 
@@ -86,14 +86,13 @@
             border: 2px solid #222;
         }
 
-        /* YENİLENEN MAVİ FİLTRE KATMANI */
         .blue-filter {
             position: absolute;
             top: -8px;
             left: -8px;
             width: 66px;
             height: 41px;
-            background: rgba(0, 150, 255, 0.4); /* Mavi Spektral Filtre */
+            background: rgba(0, 150, 255, 0.4);
             border: 2px solid rgba(0, 191, 255, 0.7);
             border-radius: 4px;
             backdrop-filter: blur(1.5px);
@@ -134,11 +133,11 @@
 
 <div class="main-container">
     <h2 style="margin-bottom:10px;">Otonom Aydınlatma Sistemi</h2>
-    <p style="color:#777; margin-bottom:20px;">Mavi Filtreleme Yöntemiyle Geri Beslemesiz Kontrol</p>
+    <p style="color:#777; margin-bottom:20px;">Hibrid Aydınlık Dengesi: Güneş + LED</p>
     
     <div class="simulation-row">
         <div class="side-panel">
-            <div class="data-label">LDR DEĞERİ</div>
+            <div class="data-label">LDR DEĞERİ (GÜN IŞIĞI)</div>
             <div class="data-value" id="adcVal">0</div>
             <div class="unit">ADC (0-1023)</div>
         </div>
@@ -173,11 +172,11 @@
     </div>
 
     <div class="controls">
-        <label style="font-weight: bold; display: block; margin-bottom: 10px;">GÜN IŞIĞI SİMÜLATÖRÜ (LDR Girişi)</label>
+        <label style="font-weight: bold; display: block; margin-bottom: 10px;">DIŞ ORTAM IŞIK ŞİDDETİ (Simüle Edilen)</label>
         <input type="range" id="lightSlider" min="0" max="1023" value="0">
         <div style="display: flex; justify-content: space-between; font-size: 13px; color: #555; margin-top: 5px;">
-            <span>GECE (Karanlık)</span>
-            <span>ÖĞLE (Tam Aydınlık)</span>
+            <span>ZİFİRİ KARANLIK</span>
+            <span>TAM GÜNEŞLİ</span>
         </div>
     </div>
 </div>
@@ -191,6 +190,7 @@
     const pwmDisplay = document.getElementById('pwmVal');
     const savingDisplay = document.getElementById('savingVal');
 
+    // LDR Eşik Değerleri
     const minADC = 100; 
     const maxADC = 800; 
 
@@ -198,13 +198,12 @@
         const val = parseInt(slider.value);
         adcDisplay.innerText = val;
 
+        // 1. GÜNEŞ EFEKTİ HESAPLAMA
         const sunIntensity = val / 1023;
         sun.style.opacity = sunIntensity;
         sun.style.transform = `scale(${0.6 + (sunIntensity * 0.4)})`;
         
-        const lightValue = Math.min(230, 20 + (val / 4.5));
-        scene.style.backgroundColor = `rgb(${lightValue}, ${lightValue + 5}, ${lightValue + 15})`;
-
+        // 2. PWM (LED GÜCÜ) HESAPLAMA
         let pwm = 0;
         if (val >= maxADC) {
             pwm = 0; 
@@ -213,9 +212,9 @@
         } else {
             pwm = Math.round(255 - ((val - minADC) * 255 / (maxADC - minADC)));
         }
-
         pwmDisplay.innerText = pwm;
-        
+
+        // 3. LED GÖRSEL PARLAKLIĞI
         const ledPower = pwm / 255;
         if (pwm > 0) {
             led.style.backgroundColor = "#ffeb3b";
@@ -227,6 +226,19 @@
             led.style.opacity = 1;
         }
 
+        // 4. HİBRİD ORTAM AYDINLIĞI (DENGELEME MANTIĞI)
+        // Güneşten ve LED'den gelen toplam lümen etkisini simüle ediyoruz
+        const ambientFromSun = (val / 1023) * 180; // Güneşin odaya katkısı
+        const ambientFromLed = (pwm / 255) * 100;  // LED'in odaya katkısı
+        
+        // Toplam aydınlık: Gece bile LED sayesinde oda belli bir seviyede aydınlık kalır
+        const baseBrightness = 50; // Zifiri karanlıkta bile minimum görünebilirlik
+        const totalBrightness = Math.min(245, baseBrightness + ambientFromSun + ambientFromLed);
+        
+        // Arka plan rengini (RGB) toplam aydınlığa göre ayarla
+        scene.style.backgroundColor = `rgb(${totalBrightness}, ${totalBrightness}, ${totalBrightness + 10})`;
+
+        // 5. TASARRUF GÖSTERGESİ
         const saving = Math.round((1 - (pwm / 255)) * 100);
         savingDisplay.innerText = `%${saving}`;
         
@@ -239,6 +251,7 @@
         }
     });
 
+    // Başlangıç tetiklemesi
     slider.dispatchEvent(new Event('input'));
 </script>
 
